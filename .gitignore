@@ -30,3 +30,14 @@
 *.exe
 *.out
 *.app
+/bin
+SampleClient
+
+# Docs
+*.docx
+*.pdf
+
+# Cmake Temp
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
