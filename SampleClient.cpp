@@ -1,20 +1,3 @@
-#ifndef _LINUX
-// Windows
-#include <stdio.h>
-#include <tchar.h>
-#include <conio.h>
-#include <winsock2.h>
-
-#include <iostream>
-
-#include <fstream>
-#include <chrono>
-#include <vector>
-
-
-#pragma warning( disable : 4996 )
-
-#else
 // Linux 
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,21 +17,14 @@
 #include <sys/ioctl.h>
 #include <vector>
 #define MAX_PATH 256
-#endif
 
 #include "SeekerSDKTypes.h"
 #include "SeekerSDKClient.h"
 #include "Utility.h"
 
-#ifndef _LINUX
-void __cdecl DataHandler(sFrameOfMocapData* data, void* pUserData);		// receives data from the server
-void __cdecl MessageHandler(int msgType, char* msg);		            // receives SeekerSDK error messages
-void __cdecl ForcePlateHandler(sForcePlates* pForcePlate, void* pUserData); // receives force plate data from the server
-#else
 void  __attribute__((__cdecl__)) ForcePlateHandler(sForcePlates* data, void* pUserData);	// receives force plate data from the server
 void  __attribute__((__cdecl__)) DataHandler(sFrameOfMocapData* data, void* pUserData);		// receives data from the server
 void  __attribute__((__cdecl__)) MessageHandler(int msgType, char* msg);		            // receives SeekerSDK error messages
-#endif
 int CreateClient(char* serverIp);
 
 unsigned int MyServersDataPort = 3130;
@@ -65,7 +41,6 @@ TrackerArray MarkerAccelerationTrackerArray;
 std::vector<SlideFrameArray> BoneVelocityTrackerArray;
 std::vector<SlideFrameArray> BoneAccelerationTrackerArray;
 
-#ifdef _LINUX
 int get_localip(const char * eth_name, char *local_ip_addr)
 {	
 	int ret = -1;    
@@ -91,13 +66,8 @@ int get_localip(const char * eth_name, char *local_ip_addr)
 	}
 	return ret;
 }
-#endif
 
-#ifndef _LINUX
-int _tmain(int argc, _TCHAR* argv[])
-#else
 int main(int argc, char* argv[])
-#endif
 {
 	int iResult = -1;
 
@@ -105,39 +75,6 @@ int main(int argc, char* argv[])
 	memset(&s_Record, 0x00, sizeof(s_Record));
 #endif
 
-	//1.init wsa
-#ifndef _LINUX	
-	WSADATA wsaData;
-	int ret = WSAStartup(MAKEWORD(2, 2), &wsaData);
-	if (ret != 0)
-	{
-		return false;
-	}
-	//2.Get host name
-	char hostname[256];
-	ret = gethostname(hostname, sizeof(hostname));
-	if (ret == SOCKET_ERROR)
-	{
-		return false;
-	}
-	//3.Get host IP
-	HOSTENT* host = gethostbyname(hostname);
-	if (host == NULL)
-	{
-		return false;
-	}
-	//strcpy(szMyIPAddress, inet_ntoa(*(in_addr*)*host->h_addr_list));
-
-	printf("found all ip address .[Please ensure there is an ip address in the same network with the server]\n");
-	for (int iCount = 0; host->h_addr_list[iCount] != NULL; ++iCount)
-	{
-		//strcpy(szMyIPAddress, inet_ntoa(*(in_addr*)*host->h_addr_list[iCount]));
-		strcpy(szMyIPAddress, inet_ntoa(*(in_addr*)host->h_addr_list[iCount]));
-		printf("%d)[%s] .\n", iCount + 1, szMyIPAddress);
-	}
-
-#else
-#endif	
 	//printf("Client gethostbyname szMyIPAddress[%s] .\n", szMyIPAddress);
 	char ipBuf[100] = {0};
 	printf("Please input the server IP\n");
@@ -148,11 +85,7 @@ int main(int argc, char* argv[])
 	if(iResult != ErrorCode_OK)
 	{
 		printf("Error initializing client.  Exiting");
-#ifndef _LINUX
-		getch();
-#else
 		getchar();
-#endif		
 		return 1;
 	}
 	else
@@ -160,12 +93,8 @@ int main(int argc, char* argv[])
 		printf("Client initialized and ready.\n");
 	}
 
-#ifndef _LINUX
-	getch();
-#else
 	getchar();
 	getchar();
-#endif	
 
 	// Done - clean up.
 	theClient->Uninitialize();
@@ -279,11 +208,7 @@ int CreateClient(char* szServerIP)
 
 
 // ForcePlateHandler receives data from the server
-#ifndef _LINUX
-void __cdecl ForcePlateHandler(sForcePlates* pForcePlate, void* pUserData)
-#else
 void  __attribute__((__cdecl__)) ForcePlateHandler(sForcePlates* pForcePlate, void* pUserData)
-#endif
 {
 	if (nullptr != pForcePlate)
 	{
@@ -302,11 +227,7 @@ void  __attribute__((__cdecl__)) ForcePlateHandler(sForcePlates* pForcePlate, vo
 }
 
 // DataHandler receives data from the server
-#ifndef _LINUX
-void __cdecl DataHandler(sFrameOfMocapData* data, void* pUserData)
-#else
 void  __attribute__((__cdecl__)) DataHandler(sFrameOfMocapData* data, void* pUserData)
-#endif
 {
 
 	SeekerSDKClient* pClient = (SeekerSDKClient*) pUserData;
@@ -482,11 +403,7 @@ void  __attribute__((__cdecl__)) DataHandler(sFrameOfMocapData* data, void* pUse
 
 
 // MessageHandler receives SeekerSDK error/debug messages
-#ifndef _LINUX
-void __cdecl MessageHandler(int msgType, char* msg)
-#else
 void  __attribute__((__cdecl__)) MessageHandler(int msgType, char* msg)
-#endif
 {
 	printf("\n%s\n", msg);
 }
