@@ -9,7 +9,7 @@
 // <copyright file="Utility.h" company="Nokov">
 //     Copyright (c) Nokov. All rights reserved.
 // </copyright>
-// <summary>辅助功能头文件，提供速度，加速度的外部计算支持</summary>
+// <summary>???????????????????????????????????</summary>
 // ***********************************************************************
 
 #pragma once
@@ -24,19 +24,26 @@
 #define FrameFactor 3  // 3,5,7
 #define FPS 60
 
-#define IN                                               //入参																			
-#define OUT                                              //出参																						
-#define IN_OUT                                           //入出参
+#define IN                                               //???																			
+#define OUT                                              //????																						
+#define IN_OUT                                           //?????
 
 struct Point
 {
 	double x;
 	double y;
 	double z;
+	long long TimeStamp;
 	std::string name;
 };
 
-struct Vel      //定义速度
+struct angle
+{
+	double heading;
+	long long TimeStamp;
+};
+
+struct Vel      //???????
 {
 	double Vx;
 	double Vy;
@@ -56,7 +63,7 @@ struct Vel      //定义速度
 	}
 };
 
-struct Accel      //定义加速度
+struct Accel      //????????
 {
 	double Ax;
 	double Ay;
@@ -76,7 +83,7 @@ struct Accel      //定义加速度
 	}
 };
 
-// 封装的计算类，可派生自此基类实现自定义计算方式
+// ??????????????????????????????????
 template<class T>
 class CalculateMethod
 {
@@ -121,16 +128,16 @@ protected:
 	{
 		int TR = m_FrameFactor / 2;
 
-		vel.Vx = m_FPS * (m_Points[TR * 2].x - m_Points[0].x) / (2 * TR);
-		vel.Vy = m_FPS * (m_Points[TR * 2].y - m_Points[0].y) / (2 * TR);
-		vel.Vz = m_FPS * (m_Points[TR * 2].z - m_Points[0].z) / (2 * TR);
+		vel.Vx = 1000 * (m_Points[TR * 2].x - m_Points[0].x) / (m_Points[TR * 2].TimeStamp - m_Points[0].TimeStamp);
+		vel.Vy = 1000 * (m_Points[TR * 2].y - m_Points[0].y) / (m_Points[TR * 2].TimeStamp - m_Points[0].TimeStamp);
+		vel.Vz = 1000 * (m_Points[TR * 2].z - m_Points[0].z) / (m_Points[TR * 2].TimeStamp - m_Points[0].TimeStamp);
 		vel.Vr = sqrt(vel.Vx * vel.Vx + vel.Vy * vel.Vy + vel.Vz * vel.Vz);
 
 		return 0;
 	}
 };
 
-// 两帧计算法，从第二帧起实时计算
+// ??????????????????????
 class CalculateVelocityByTwoFrame : public CalculateMethod<Vel>
 {
 public:
@@ -139,9 +146,9 @@ public:
 protected:
 	virtual int calculate(OUT Vel& vel) override
 	{
-		vel.Vx = m_FPS * (m_Points[1].x - m_Points[0].x);
-		vel.Vy = m_FPS * (m_Points[1].y - m_Points[0].y);
-		vel.Vz = m_FPS * (m_Points[1].z - m_Points[0].z);
+		vel.Vx = 1000 * (m_Points[1].x - m_Points[0].x)/(m_Points[1].TimeStamp - m_Points[0].TimeStamp);
+		vel.Vy = 1000 * (m_Points[1].y - m_Points[0].y)/(m_Points[1].TimeStamp - m_Points[0].TimeStamp);
+		vel.Vz = 1000 * (m_Points[1].z - m_Points[0].z)/(m_Points[1].TimeStamp - m_Points[0].TimeStamp);
 		vel.Vr = sqrt(vel.Vx * vel.Vx + vel.Vy * vel.Vy + vel.Vz * vel.Vz);
 
 		return 0;
@@ -157,16 +164,22 @@ protected:
 	{
 		int TR = m_FrameFactor / 2;
 
-		accel.Ax = m_FPS * m_FPS * (m_Points[TR * 2].x - 2 * m_Points[TR].x + m_Points[0].x) / (TR * TR);
-		accel.Ay = m_FPS * m_FPS * (m_Points[TR * 2].y - 2 * m_Points[TR].y + m_Points[0].y) / (TR * TR);
-		accel.Az = m_FPS * m_FPS * (m_Points[TR * 2].z - 2 * m_Points[TR].z + m_Points[0].z) / (TR * TR);
+		accel.Ax = 1000 * 1000 * ((m_Points[TR * 2].x - m_Points[TR].x)/(m_Points[TR * 2].TimeStamp - m_Points[TR].TimeStamp) 
+		                         -(m_Points[TR].x- m_Points[0].x)/(m_Points[TR].TimeStamp- m_Points[0].TimeStamp)) /
+								  ((m_Points[TR * 2].TimeStamp - m_Points[0].TimeStamp)/2);
+		accel.Ay = 1000 * 1000 * ((m_Points[TR * 2].y - m_Points[TR].y)/(m_Points[TR * 2].TimeStamp - m_Points[TR].TimeStamp) 
+		                         -(m_Points[TR].y- m_Points[0].y)/(m_Points[TR].TimeStamp- m_Points[0].TimeStamp)) /
+								  ((m_Points[TR * 2].TimeStamp - m_Points[0].TimeStamp)/2);
+		accel.Az = 1000 * 1000 * ((m_Points[TR * 2].z - m_Points[TR].z)/(m_Points[TR * 2].TimeStamp - m_Points[TR].TimeStamp) 
+		                         -(m_Points[TR].z- m_Points[0].z)/(m_Points[TR].TimeStamp- m_Points[0].TimeStamp)) /
+								  ((m_Points[TR * 2].TimeStamp - m_Points[0].TimeStamp)/2);
 		accel.Ar = sqrt(accel.Ax * accel.Ax + accel.Ay * accel.Ay + accel.Az * accel.Az);
 
 		return 0;
 	}
 };
 
-// 滑动帧数组，存储待计算的数据，保留原始指针类型
+// ????????飬?洢?????????????????????????
 class SlideFrameArray
 {
 public:
@@ -187,13 +200,13 @@ public:
 		return _list.size();
 	}
 
-	size_t Cache(double x, double y, double z)
+	size_t Cache(double x, double y, double z,long long TimeStamp)
 	{
 		Point point = { 0 };
 		point.x = x;
 		point.y = y;
 		point.z = z;
-
+        point.TimeStamp = TimeStamp;
 		return cache(point);
 	}
 
@@ -239,7 +252,7 @@ private:
 			retArray[index] = *itor;
 		}
 
-		// 向后滑动一格
+		// ???????
 		_list.pop_front();
 
 		return true;
@@ -248,9 +261,3 @@ private:
 private:
 	std::list<Point> _list;
 };
-
-
-
-
-
-
