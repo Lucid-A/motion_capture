@@ -350,21 +350,38 @@ void  __attribute__((__cdecl__)) DataHandler(sFrameOfMocapData* data, void* pUse
 			double center_x=0;
 			double center_y=0;
 			double center_z=0;
+			double a[3][4]={{1110.02,1,0,0},
+			                { 991.62,0,1,0},
+				            {      0,0,0,1}
+			               };
+			double transform_map[6][3]={0};
 			printf( "Markerset%d: %s [nMarkers Count=%d]\n", i+1, markerset->szName, markerset->nMarkers);  //Output the id and name of the i-th Markerset and the total number of named markers in the Markerset
 			printf( "{\n");
 			for (int i_Marker = 0;i_Marker < markerset->nMarkers; i_Marker++)	//Output the id and information (x, y, z) of the Marker point contained in the i-th Markerset
 			{
+				transform_map[i_Marker][0]=-a[0][0]*a[0][1]-a[1][0]*a[1][1]-a[2][0]*a[2][1]
+				                           +a[0][1]*markerset->Markers[i_Marker][0]
+										   +a[1][1]*markerset->Markers[i_Marker][1]
+										   +a[2][1]*markerset->Markers[i_Marker][2];
+				transform_map[i_Marker][1]=-a[0][0]*a[0][2]-a[1][0]*a[1][2]-a[2][0]*a[2][2]
+				                           +a[0][2]*markerset->Markers[i_Marker][0]
+										   +a[1][2]*markerset->Markers[i_Marker][1]
+										   +a[2][2]*markerset->Markers[i_Marker][2];
+				transform_map[i_Marker][2]=-a[0][0]*a[0][3]-a[1][0]*a[1][3]-a[2][0]*a[2][3]
+				                           +a[0][3]*markerset->Markers[i_Marker][0]
+										   +a[1][3]*markerset->Markers[i_Marker][1]
+										   +a[2][3]*markerset->Markers[i_Marker][2];
 				printf("\tMarker%d: %3.2f,%3.2f,%3.2f\n",
 					i_Marker,
-					markerset->Markers[i_Marker][0],
-					markerset->Markers[i_Marker][1],
-					markerset->Markers[i_Marker][2]);
+					transform_map[i_Marker][0],
+					transform_map[i_Marker][1],
+					transform_map[i_Marker][2]);
 
 				// calculate the velocity and acceleration
-				MarkerVelocityTrackerArray[i][i_Marker].Cache(markerset->Markers[i_Marker][0]
-					, markerset->Markers[i_Marker][1], markerset->Markers[i_Marker][2],data->iTimeStamp);
-				MarkerAccelerationTrackerArray[i][i_Marker].Cache(markerset->Markers[i_Marker][0]
-					, markerset->Markers[i_Marker][1], markerset->Markers[i_Marker][2],data->iTimeStamp);
+				MarkerVelocityTrackerArray[i][i_Marker].Cache(transform_map[i_Marker][0]
+					, transform_map[i_Marker][1], transform_map[i_Marker][2],data->iTimeStamp);
+				MarkerAccelerationTrackerArray[i][i_Marker].Cache(transform_map[i_Marker][0]
+					, transform_map[i_Marker][1], transform_map[i_Marker][2],data->iTimeStamp);
 
 
                 MarkerVelocity[i][i_Marker][0]=MarkerVelocity[i][i_Marker][1];
@@ -408,15 +425,16 @@ void  __attribute__((__cdecl__)) DataHandler(sFrameOfMocapData* data, void* pUse
 			}
 			for(int i_Marker = 0;i_Marker < markerset->nMarkers; i_Marker++)
 			{
-              center_x+=markerset->Markers[i_Marker][0]/markerset->nMarkers;
-			  center_y+=markerset->Markers[i_Marker][1]/markerset->nMarkers;
-			  center_z+=markerset->Markers[i_Marker][2]/markerset->nMarkers;
+              center_x+=transform_map[i_Marker][0]/markerset->nMarkers;
+			  center_y+=transform_map[i_Marker][1]/markerset->nMarkers;
+			  center_z+=transform_map[i_Marker][2]/markerset->nMarkers;
 			}
+            
 
-			double x1=markerset->Markers[2][0]-markerset->Markers[0][0];
-			double y1=markerset->Markers[2][1]-markerset->Markers[0][1];
-			double x2=markerset->Markers[1][0]-markerset->Markers[3][0];
-			double y2=markerset->Markers[1][1]-markerset->Markers[3][1];
+			double x1=transform_map[2][0]-transform_map[0][0];
+			double y1=transform_map[2][1]-transform_map[0][1];
+			double x2=transform_map[1][0]-transform_map[3][0];
+			double y2=transform_map[1][1]-transform_map[3][1];
 			double car_heading=atan2(y1+y2,x1+x2);
             
 			MarkerVelocityTrackerArray[i][markerset->nMarkers].Cache(center_x, center_y, center_z,data->iTimeStamp);
@@ -582,4 +600,3 @@ void  __attribute__((__cdecl__)) MessageHandler(int msgType, char* msg)
 {
 	printf("\n%s\n", msg);
 }
-
