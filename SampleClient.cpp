@@ -196,7 +196,7 @@ int CreateClient(char* szServerIP)
 	//theClient->SetVerbosityLevel(Verbosity_Error);
 	// Init Client and connect to SeekerSDK server
 	int retCode = -1;
-	retCode = theClient->Initialize(szServerIP);//szMyIPAddress£ºClient IP (local IP)£»szServerIP£ºServer IP (computer IP running motion capture software)
+	retCode = theClient->Initialize(szServerIP);//szMyIPAddressClient IP (local IP)szServerIPServer IP (computer IP running motion capture software)
 	//Sleep(10);
 	memcpy(szServerIPAddress, szServerIP, sizeof(szServerIP));
 
@@ -335,13 +335,21 @@ void  __attribute__((__cdecl__)) DataHandler(sFrameOfMocapData* data, void* pUse
 
 		MarkerVelocityTrackerArray.resize(data->nMarkerSets);
 		MarkerAccelerationTrackerArray.resize(data->nMarkerSets);
-
+        static Vel MarkerVelocity[30][6][3];
+		static angle heading[30][6][3]={0};
 		for(i=0; i < data->nMarkerSets; i++)
 		{
 			sMarkerSetData *markerset = &data->MocapData[i];
-			MarkerVelocityTrackerArray[i].resize(markerset->nMarkers);
-			MarkerAccelerationTrackerArray[i].resize(markerset->nMarkers);
+			MarkerVelocityTrackerArray[i].resize(markerset->nMarkers+1);
+			MarkerAccelerationTrackerArray[i].resize(markerset->nMarkers+1);
 
+            static CalculateVelocity method(60, 5); //FPS:60 FrameFactor:3
+			static CalculateAcceleration method2(60, 5); //FPS:60 FrameFactor:5
+            double w[6][3]={0};
+			Accel MarkerAccleration;
+			double center_x=0;
+			double center_y=0;
+			double center_z=0;
 			printf( "Markerset%d: %s [nMarkers Count=%d]\n", i+1, markerset->szName, markerset->nMarkers);  //Output the id and name of the i-th Markerset and the total number of named markers in the Markerset
 			printf( "{\n");
 			for (int i_Marker = 0;i_Marker < markerset->nMarkers; i_Marker++)	//Output the id and information (x, y, z) of the Marker point contained in the i-th Markerset
@@ -354,22 +362,106 @@ void  __attribute__((__cdecl__)) DataHandler(sFrameOfMocapData* data, void* pUse
 
 				// calculate the velocity and acceleration
 				MarkerVelocityTrackerArray[i][i_Marker].Cache(markerset->Markers[i_Marker][0]
-					, markerset->Markers[i_Marker][1], markerset->Markers[i_Marker][2]);
+					, markerset->Markers[i_Marker][1], markerset->Markers[i_Marker][2],data->iTimeStamp);
 				MarkerAccelerationTrackerArray[i][i_Marker].Cache(markerset->Markers[i_Marker][0]
-					, markerset->Markers[i_Marker][1], markerset->Markers[i_Marker][2]);
+					, markerset->Markers[i_Marker][1], markerset->Markers[i_Marker][2],data->iTimeStamp);
 
-				//Caution: Actually, you cat get velocity of frame 2 after you get frame 3's position, But it just has a little difference
-				static CalculateVelocity method(60, 3); //FPS:60 FrameFactor:3
-				static CalculateAcceleration method2(60, 3); //FPS:60 FrameFactor:5
 
-				Vel MarkerVelocity;
-				MarkerVelocityTrackerArray[i][i_Marker].tryToCalculate(MarkerVelocity, method);
-
-				Accel MarkerAccleration;
-				MarkerAccelerationTrackerArray[i][i_Marker].tryToCalculate(MarkerAccleration, method2);
+                MarkerVelocity[i][i_Marker][0]=MarkerVelocity[i][i_Marker][1];
+				MarkerVelocity[i][i_Marker][1]=MarkerVelocity[i][i_Marker][2];
+				MarkerVelocityTrackerArray[i][i_Marker].tryToCalculate(MarkerVelocity[i][i_Marker][2], method);
+                
+				heading[i][i_Marker][0]=heading[i][i_Marker][1];
+				heading[i][i_Marker][1]=heading[i][i_Marker][2];
+				heading[i][i_Marker][2].heading=atan2(MarkerVelocity[i][i_Marker][2].Vy+MarkerVelocity[i][i_Marker][1].Vy+MarkerVelocity[i][i_Marker][0].Vy
+				                                     ,MarkerVelocity[i][i_Marker][2].Vx+MarkerVelocity[i][i_Marker][1].Vx+MarkerVelocity[i][i_Marker][0].Vx);
+				heading[i][i_Marker][2].TimeStamp=data->iTimeStamp;
+				if(heading[i][i_Marker][2].heading-heading[i][i_Marker][0].heading>5)
+				{
+                    w[i_Marker][0]=w[i_Marker][1];
+					w[i_Marker][1]=w[i_Marker][2];
+                    w[i_Marker][2]=1000*(heading[i][i_Marker][2].heading-heading[i][i_Marker][0].heading-2*M_PI)
+					            /(heading[i][i_Marker][2].TimeStamp-heading[i][i_Marker][0].TimeStamp);
+					w[i_Marker][2]=(w[i_Marker][0]+w[i_Marker][1]+w[i_Marker][2])/3;
+				}
+				else if(heading[i][i_Marker][2].heading-heading[i][i_Marker][0].heading<-5)
+				{
+					w[i_Marker][0]=w[i_Marker][1];
+					w[i_Marker][1]=w[i_Marker][2];
+                    w[i_Marker][2]=1000*(heading[i][i_Marker][2].heading-heading[i][i_Marker][0].heading+2*M_PI)
+					            /(heading[i][i_Marker][2].TimeStamp-heading[i][i_Marker][0].TimeStamp);
+					w[i_Marker][2]=(w[i_Marker][0]+w[i_Marker][1]+w[i_Marker][2])/3;
+				}
+				else
+				{
+					w[i_Marker][0]=w[i_Marker][1];
+					w[i_Marker][1]=w[i_Marker][2];
+					w[i_Marker][2]=1000*(heading[i][i_Marker][2].heading-heading[i][i_Marker][0].heading)
+					            /(heading[i][i_Marker][2].TimeStamp-heading[i][i_Marker][0].TimeStamp);
+					w[i_Marker][2]=(w[i_Marker][0]+w[i_Marker][1]+w[i_Marker][2])/3;
+				}
+                
 				
-				std::cout << "\t\t" << MarkerVelocity << "\t\t" << MarkerAccleration;
+				MarkerAccelerationTrackerArray[i][i_Marker].tryToCalculate(MarkerAccleration, method2);
+				std::cout<< "\t\t"<<"w:"<<w[i_Marker][2]<< "\t"<<"heading:"<<heading[i][i_Marker][2].heading<<std::endl;;
+				std::cout << "\t\t" <<MarkerVelocity[i][i_Marker][2]<< "\t\t" << MarkerAccleration;
 			}
+			for(int i_Marker = 0;i_Marker < markerset->nMarkers; i_Marker++)
+			{
+              center_x+=markerset->Markers[i_Marker][0]/markerset->nMarkers;
+			  center_y+=markerset->Markers[i_Marker][1]/markerset->nMarkers;
+			  center_z+=markerset->Markers[i_Marker][2]/markerset->nMarkers;
+			}
+
+			double x1=markerset->Markers[2][0]-markerset->Markers[0][0];
+			double y1=markerset->Markers[2][1]-markerset->Markers[0][1];
+			double x2=markerset->Markers[1][0]-markerset->Markers[3][0];
+			double y2=markerset->Markers[1][1]-markerset->Markers[3][1];
+			double car_heading=atan2(y1+y2,x1+x2);
+            
+			MarkerVelocityTrackerArray[i][markerset->nMarkers].Cache(center_x, center_y, center_z,data->iTimeStamp);
+			MarkerAccelerationTrackerArray[i][markerset->nMarkers].Cache(center_x, center_y, center_z,data->iTimeStamp);
+            
+            MarkerVelocity[i][markerset->nMarkers][0]=MarkerVelocity[i][markerset->nMarkers][1];
+			MarkerVelocity[i][markerset->nMarkers][1]=MarkerVelocity[i][markerset->nMarkers][2];
+			MarkerVelocityTrackerArray[i][markerset->nMarkers].tryToCalculate(MarkerVelocity[i][markerset->nMarkers][2], method);
+                
+			heading[i][markerset->nMarkers][0]=heading[i][markerset->nMarkers][1];
+			heading[i][markerset->nMarkers][1]=heading[i][markerset->nMarkers][2];
+			heading[i][markerset->nMarkers][2].heading=atan2(MarkerVelocity[i][markerset->nMarkers][2].Vy+MarkerVelocity[i][markerset->nMarkers][1].Vy+MarkerVelocity[i][markerset->nMarkers][0].Vy
+			                                                ,MarkerVelocity[i][markerset->nMarkers][2].Vx+MarkerVelocity[i][markerset->nMarkers][1].Vx+MarkerVelocity[i][markerset->nMarkers][0].Vx);
+			heading[i][markerset->nMarkers][2].TimeStamp=data->iTimeStamp;
+			if(heading[i][markerset->nMarkers][2].heading-heading[i][markerset->nMarkers][0].heading>5)
+			{
+				w[markerset->nMarkers][0]=w[markerset->nMarkers][1];
+				w[markerset->nMarkers][1]=w[markerset->nMarkers][2];
+                w[markerset->nMarkers][2]=1000*(heading[i][markerset->nMarkers][2].heading-heading[i][markerset->nMarkers][0].heading-2*M_PI)
+				                       /(heading[i][markerset->nMarkers][2].TimeStamp-heading[i][markerset->nMarkers][0].TimeStamp);
+				w[markerset->nMarkers][2]=(w[markerset->nMarkers][0]+w[markerset->nMarkers][1]+w[markerset->nMarkers][2])/3;
+			}
+			else if(heading[i][markerset->nMarkers][2].heading-heading[i][markerset->nMarkers][0].heading<-5)
+			{
+				w[markerset->nMarkers][0]=w[markerset->nMarkers][1];
+				w[markerset->nMarkers][1]=w[markerset->nMarkers][2];
+                w[markerset->nMarkers][2]=1000*(heading[i][markerset->nMarkers][2].heading-heading[i][markerset->nMarkers][0].heading+2*M_PI)
+				                       /(heading[i][markerset->nMarkers][2].TimeStamp-heading[i][markerset->nMarkers][0].TimeStamp);
+			    w[markerset->nMarkers][2]=(w[markerset->nMarkers][0]+w[markerset->nMarkers][1]+w[markerset->nMarkers][2])/3;
+			}
+			else
+			{
+				w[markerset->nMarkers][0]=w[markerset->nMarkers][1];
+				w[markerset->nMarkers][1]=w[markerset->nMarkers][2];
+				w[markerset->nMarkers][2]=1000*(heading[i][markerset->nMarkers][2].heading-heading[i][markerset->nMarkers][0].heading)
+				                       /(heading[i][markerset->nMarkers][2].TimeStamp-heading[i][markerset->nMarkers][0].TimeStamp);
+			    w[markerset->nMarkers][2]=(w[markerset->nMarkers][0]+w[markerset->nMarkers][1]+w[markerset->nMarkers][2])/3;
+			}
+            MarkerAccelerationTrackerArray[i][markerset->nMarkers].tryToCalculate(MarkerAccleration, method2);
+			printf("\tMarkercenter: %3.2f,%3.2f,%3.2f\n",
+					center_x,
+					center_y,
+					center_z);
+			std::cout<< "\t\t"<<"w_cen:"<<w[markerset->nMarkers][2]<< "\t"<<"heading_cen:"<<heading[i][markerset->nMarkers][2].heading<< "\t"<<"car_heading:"<<car_heading<<std::endl;
+			std::cout << "\t\t" <<MarkerVelocity[i][markerset->nMarkers][2]<< "\t\t" << MarkerAccleration;
 			printf( "}\n");//The data output of the i-th Markerset is completed
 		}
 
@@ -394,9 +486,9 @@ void  __attribute__((__cdecl__)) DataHandler(sFrameOfMocapData* data, void* pUse
 
 			// calculate the velocity and acceleration
 			BoneVelocityTrackerArray[i].Cache(data->RigidBodies[i].x
-				, data->RigidBodies[i].y, data->RigidBodies[i].z);
+				, data->RigidBodies[i].y, data->RigidBodies[i].z,data->iTimeStamp);
 			BoneAccelerationTrackerArray[i].Cache(data->RigidBodies[i].x
-				, data->RigidBodies[i].y, data->RigidBodies[i].z);
+				, data->RigidBodies[i].y, data->RigidBodies[i].z,data->iTimeStamp);
 
 			//Caution: Actually, you cat get velocity of frame 2 after you get frame 3's position, But it just has a little difference
 			static CalculateVelocity method1(60, 3); //FPS:60 FrameFactor:3
