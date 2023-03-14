@@ -1,20 +1,3 @@
-#ifndef _LINUX
-// Windows
-#include <stdio.h>
-#include <tchar.h>
-#include <conio.h>
-#include <winsock2.h>
-
-#include <iostream>
-
-#include <fstream>
-#include <chrono>
-#include <vector>
-
-
-#pragma warning( disable : 4996 )
-
-#else
 // Linux 
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,21 +17,19 @@
 #include <sys/ioctl.h>
 #include <vector>
 #define MAX_PATH 256
-#endif
 
 #include "SeekerSDKTypes.h"
 #include "SeekerSDKClient.h"
 #include "Utility.h"
 
-#ifndef _LINUX
-void __cdecl DataHandler(sFrameOfMocapData* data, void* pUserData);		// receives data from the server
-void __cdecl MessageHandler(int msgType, char* msg);		            // receives SeekerSDK error messages
-void __cdecl ForcePlateHandler(sForcePlates* pForcePlate, void* pUserData); // receives force plate data from the server
-#else
+#include "ros/ros.h"
+#include "motion_capture/nokovStamped.h"
+
+
 void  __attribute__((__cdecl__)) ForcePlateHandler(sForcePlates* data, void* pUserData);	// receives force plate data from the server
 void  __attribute__((__cdecl__)) DataHandler(sFrameOfMocapData* data, void* pUserData);		// receives data from the server
 void  __attribute__((__cdecl__)) MessageHandler(int msgType, char* msg);		            // receives SeekerSDK error messages
-#endif
+
 int CreateClient(char* serverIp);
 
 unsigned int MyServersDataPort = 3130;
@@ -65,7 +46,8 @@ TrackerArray MarkerAccelerationTrackerArray;
 std::vector<SlideFrameArray> BoneVelocityTrackerArray;
 std::vector<SlideFrameArray> BoneAccelerationTrackerArray;
 
-#ifdef _LINUX
+ros::Publisher pub; 
+
 int get_localip(const char * eth_name, char *local_ip_addr)
 {	
 	int ret = -1;    
@@ -91,68 +73,31 @@ int get_localip(const char * eth_name, char *local_ip_addr)
 	}
 	return ret;
 }
-#endif
 
-#ifndef _LINUX
-int _tmain(int argc, _TCHAR* argv[])
-#else
+
 int main(int argc, char* argv[])
-#endif
 {
+    ros::init(argc, argv, "nokov_forward");
+    ros::NodeHandle nh;
+    pub = nh.advertise<motion_capture::nokovStamped>("nokov_forward", 1000);
+    ros::Rate loop_rate(120); // nokov frame rate: 60Hz
+
 	int iResult = -1;
 
 #ifdef LOST_FRAME_TEST
 	memset(&s_Record, 0x00, sizeof(s_Record));
 #endif
-
-	//1.init wsa
-#ifndef _LINUX	
-	WSADATA wsaData;
-	int ret = WSAStartup(MAKEWORD(2, 2), &wsaData);
-	if (ret != 0)
-	{
-		return false;
-	}
-	//2.Get host name
-	char hostname[256];
-	ret = gethostname(hostname, sizeof(hostname));
-	if (ret == SOCKET_ERROR)
-	{
-		return false;
-	}
-	//3.Get host IP
-	HOSTENT* host = gethostbyname(hostname);
-	if (host == NULL)
-	{
-		return false;
-	}
-	//strcpy(szMyIPAddress, inet_ntoa(*(in_addr*)*host->h_addr_list));
-
-	printf("found all ip address .[Please ensure there is an ip address in the same network with the server]\n");
-	for (int iCount = 0; host->h_addr_list[iCount] != NULL; ++iCount)
-	{
-		//strcpy(szMyIPAddress, inet_ntoa(*(in_addr*)*host->h_addr_list[iCount]));
-		strcpy(szMyIPAddress, inet_ntoa(*(in_addr*)host->h_addr_list[iCount]));
-		printf("%d)[%s] .\n", iCount + 1, szMyIPAddress);
-	}
-
-#else
-#endif	
+	
 	//printf("Client gethostbyname szMyIPAddress[%s] .\n", szMyIPAddress);
-	char ipBuf[100] = {0};
-	printf("Please input the server IP\n");
-	scanf("%s", &ipBuf);
+	char ipBuf[100] = "192.168.0.123";
 
 	//4.Create SeekerSDK Client
 	iResult = CreateClient(ipBuf);
 	if(iResult != ErrorCode_OK)
 	{
 		printf("Error initializing client.  Exiting");
-#ifndef _LINUX
-		getch();
-#else
+
 		getchar();
-#endif		
 		return 1;
 	}
 	else
@@ -160,12 +105,8 @@ int main(int argc, char* argv[])
 		printf("Client initialized and ready.\n");
 	}
 
-#ifndef _LINUX
-	getch();
-#else
 	getchar();
 	getchar();
-#endif	
 
 	// Done - clean up.
 	theClient->Uninitialize();
@@ -279,11 +220,7 @@ int CreateClient(char* szServerIP)
 
 
 // ForcePlateHandler receives data from the server
-#ifndef _LINUX
-void __cdecl ForcePlateHandler(sForcePlates* pForcePlate, void* pUserData)
-#else
 void  __attribute__((__cdecl__)) ForcePlateHandler(sForcePlates* pForcePlate, void* pUserData)
-#endif
 {
 	if (nullptr != pForcePlate)
 	{
@@ -302,11 +239,7 @@ void  __attribute__((__cdecl__)) ForcePlateHandler(sForcePlates* pForcePlate, vo
 }
 
 // DataHandler receives data from the server
-#ifndef _LINUX
-void __cdecl DataHandler(sFrameOfMocapData* data, void* pUserData)
-#else
 void  __attribute__((__cdecl__)) DataHandler(sFrameOfMocapData* data, void* pUserData)
-#endif
 {
 
 	SeekerSDKClient* pClient = (SeekerSDKClient*) pUserData;
@@ -345,6 +278,11 @@ void  __attribute__((__cdecl__)) DataHandler(sFrameOfMocapData* data, void* pUse
 
             static CalculateVelocity method(60, 5); //FPS:60 FrameFactor:3
 			static CalculateAcceleration method2(60, 5); //FPS:60 FrameFactor:5
+            
+            motion_capture::nokovStamped msg;
+            msg.header.stamp = ros::Time::Time(data->iTimeStamp / 1000, (data->iTimeStamp % 1000) * 1E6);
+            msg.header.frame_id = std::string("nokov");
+
             double w[6][3]={0};
 			Accel MarkerAccleration;
 			double center_x=0;
@@ -474,11 +412,29 @@ void  __attribute__((__cdecl__)) DataHandler(sFrameOfMocapData* data, void* pUse
 			    w[markerset->nMarkers][2]=(w[markerset->nMarkers][0]+w[markerset->nMarkers][1]+w[markerset->nMarkers][2])/3;
 			}
             MarkerAccelerationTrackerArray[i][markerset->nMarkers].tryToCalculate(MarkerAccleration, method2);
-			printf("\tMarkercenter: %3.2f,%3.2f,%3.2f\n",
+			
+            msg.pose2d.x = center_x;
+            msg.pose2d.y = center_y;
+            msg.pose2d.theta = car_heading;
+
+            msg.vel_linear.x = MarkerVelocity[i][markerset->nMarkers][2].Vx;
+            msg.vel_linear.y = MarkerVelocity[i][markerset->nMarkers][2].Vy;
+            msg.vel_linear.z = MarkerVelocity[i][markerset->nMarkers][2].Vz;
+
+            msg.vel_theta = heading[i][markerset->nMarkers][2].heading;
+            msg.yaw_omega = w[markerset->nMarkers][2];
+
+            msg.acc_linear.x = MarkerAccleration.Ax;
+            msg.acc_linear.y = MarkerAccleration.Ay;
+            msg.acc_linear.z = MarkerAccleration.Az;
+
+            pub.publish(msg);
+
+            printf("\tMarkercenter: %3.2f,%3.2f,%3.2f\n",
 					center_x,
 					center_y,
 					center_z);
-			std::cout<< "\t\t"<<"w_cen:"<<w[markerset->nMarkers][2]<< "\t"<<"heading_cen:"<<heading[i][markerset->nMarkers][2].heading<< "\t"<<"car_heading:"<<car_heading<<std::endl;
+			std::cout<< "\t\t"<<"w_cen:"<<w[markerset->nMarkers][2]<< "\t"<<"heading_cen:"<<heading[i][markerset->nMarkers][2].heading << "\t"<<"car_heading:"<<car_heading<<std::endl;
 			std::cout << "\t\t" <<MarkerVelocity[i][markerset->nMarkers][2]<< "\t\t" << MarkerAccleration;
 			printf( "}\n");//The data output of the i-th Markerset is completed
 		}
@@ -592,11 +548,7 @@ void  __attribute__((__cdecl__)) DataHandler(sFrameOfMocapData* data, void* pUse
 
 
 // MessageHandler receives SeekerSDK error/debug messages
-#ifndef _LINUX
-void __cdecl MessageHandler(int msgType, char* msg)
-#else
 void  __attribute__((__cdecl__)) MessageHandler(int msgType, char* msg)
-#endif
 {
 	printf("\n%s\n", msg);
 }
