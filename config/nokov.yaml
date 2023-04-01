@@ -1,0 +1,7 @@
+# 要追踪的 MarkerSet 的名称，大小写敏感
+name: ['car', 'Car1']
+# 是否将坐标变化发布到 /tf 话题下
+tf_broadcast: false
+# 从 nokov 坐标系到 map 坐标系的变换矩阵
+# 若为空则不变换，默认 frame_id 为 nokov
+static_transform: false

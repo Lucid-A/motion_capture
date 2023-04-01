@@ -1,0 +1,5 @@
+<launch>
+  <node name="nokov_test" pkg="motion_capture" type="nokov_forward.py" output="screen">
+    <rosparam command="load" file="$(find motion_capture)/config/nokov.yaml" />
+  </node>
+</launch>
